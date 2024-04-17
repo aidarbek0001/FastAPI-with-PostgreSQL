@@ -1,6 +1,11 @@
+from contextlib import contextmanager
+
 from fastapi import FastAPI, status, HTTPException, Depends
 from pydantic import BaseModel
 from typing import List
+
+from sqlalchemy.orm import Session
+
 from database import SessionLocal
 import models
 from fastapi_jwt_auth2 import AuthJWT
@@ -23,7 +28,13 @@ app = FastAPI()
 #            'on_offer': item.on_offer
 #            }
 
+
+# def get_db():
 db = SessionLocal()
+    # try:
+    #     yield db
+    # finally:
+    #     db.close()
 
 
 class Item(BaseModel):
@@ -34,7 +45,7 @@ class Item(BaseModel):
     on_offer: bool
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 @app.get("/items", response_model=List[Item], status_code=200)
@@ -105,7 +116,7 @@ class User(BaseModel):
     password: str
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                "username": "admin",
                "email": "admin@gmail.com",
@@ -119,35 +130,57 @@ class UserLogin(BaseModel):
     password: str
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "username": "admin",
                 "password": "admin"
             }
         }
 
-users = []
 
 
 @app.post("/signup", status_code=201)
 def create_user(user: User):
-    new_user = {
-        "username": user.username,
-        "email": user.email,
-        "password": user.password
-    }
 
-    users.append(new_user)
+    new_user = models.User(
+        username=user.username,
+        email=user.email,
+        password=user.password
+    )
+    # db_item = db.query(models.Item).filter(item.name == new_item.name).first()
+
+    # if db_item is not None:
+    #    raise HTTPException(status_code=400, detail="Item already exists")
+
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
     return new_user
 
 
-@app.get("/users", response_model=List[User])
-def get_all_users():
-    return users
+# @app.get("/users", response_model=List[User])
+# def get_all_users():
+#     return users
 
+@contextmanager
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 @app.post("/login")
-def login(user: UserLogin, Authorize: AuthJWT = Depends()):
-    for usr in users:
-        if (usr["username"] == user.username and usr["password"] == user.password):
-            return usr
+def login(user: UserLogin, authorize: AuthJWT = Depends(), db: Session = Depends(get_db)):
+    try:
+        print(get_db)
+        db_user = db.query(models.User).filter(models.User.username == user.username).first()
+        if not db_user:
+            raise HTTPException(status_code=404, detail="User not found")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    access_token = authorize.create_access_token(subject=user.username)
+    return {"access_token": access_token, "token_type": "bearer"}
