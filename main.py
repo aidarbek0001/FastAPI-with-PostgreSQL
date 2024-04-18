@@ -1,10 +1,11 @@
 from contextlib import contextmanager
 
-from fastapi import FastAPI, status, HTTPException, Depends
+from fastapi import FastAPI, status, HTTPException, Depends, APIRouter
 from pydantic import BaseModel
 from typing import List
-
 from sqlalchemy.orm import Session
+import bcrypt
+from starlette import schemas
 
 from database import SessionLocal
 import models
@@ -120,7 +121,7 @@ class User(BaseModel):
             "example": {
                "username": "admin",
                "email": "admin@gmail.com",
-                "password": "admin"
+               "password": "admin"
             }
         }
 
@@ -139,30 +140,64 @@ class UserLogin(BaseModel):
 
 
 
+#@app.post("/signup", status_code=201)
+#def create_user(user: User):
+
+    # new_user = models.User(
+    #     username=user.username,
+    #     email=user.email,
+    #     password=user.password
+    # )
+    # # db_item = db.query(models.Item).filter(item.name == new_item.name).first()
+    #
+    # # if db_item is not None:
+    # #    raise HTTPException(status_code=400, detail="Item already exists")
+    #
+    # try:
+    #     db.commit()
+    # except Exception as e:
+    #     db.rollback()
+    #     raise HTTPException(status_code=400, detail=str(e))
+    # return new_user
 @app.post("/signup", status_code=201)
 def create_user(user: User):
+    existing_user = db.query(models.User).filter(
+        (models.User.username == user.username) | (models.User.email == user.email)
+    ).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="User already exists with the same username or email")
 
     new_user = models.User(
         username=user.username,
         email=user.email,
-        password=user.password
+        password=bcrypt.hashpw(user.password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
     )
-    # db_item = db.query(models.Item).filter(item.name == new_item.name).first()
-
-    # if db_item is not None:
-    #    raise HTTPException(status_code=400, detail="Item already exists")
-
+    db.add(new_user)
     try:
         db.commit()
+        db.refresh(new_user)
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
-    return new_user
 
+    return new_user
 
 # @app.get("/users", response_model=List[User])
 # def get_all_users():
 #     return users
+
+
+#  Получить всех пользователей из базы данных
+users = db.query(models.User).all()
+#
+# # Хэшировать пароли и обновить записи в базе данных
+# for user in users:
+#     hashed_password = bcrypt.hashpw(user.password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+#     user.password = hashed_password
+#
+# # Сохранить изменения в базе данных
+# db.commit()
+
 
 @contextmanager
 def get_db():
@@ -173,14 +208,33 @@ def get_db():
         db.close()
 
 @app.post("/login")
-def login(user: UserLogin, authorize: AuthJWT = Depends(), db: Session = Depends(get_db)):
+def login(user: UserLogin, authorize: AuthJWT = Depends()):
     try:
-        print(get_db)
-        db_user = db.query(models.User).filter(models.User.username == user.username).first()
-        if not db_user:
-            raise HTTPException(status_code=404, detail="User not found")
+        with get_db() as db:
+            db_user = db.query(models.User).filter(models.User.username == user.username).first()
+            if not db_user:
+                raise HTTPException(status_code=404, detail="User not found")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
     access_token = authorize.create_access_token(subject=user.username)
     return {"access_token": access_token, "token_type": "bearer"}
+
+
+
+
+@app.get("/users")
+def get_users(user: users = Depends(get_db)):
+    users_info = []
+
+    for user in users:
+        user_info = {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+        }
+        users_info.append(user_info)
+
+    return users_info
+
+

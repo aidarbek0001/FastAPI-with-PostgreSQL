@@ -18,7 +18,7 @@ class User(Base):
     id = Column(Integer, primary_key=True)
     username = Column(String(255), nullable=False, unique=False)
     password = Column(String(255), nullable=False)
-    email= Column(String(255), nullable=False)
+    email = Column(String(255), nullable=False)
 
     def __repr__(self):
         return f"<Item: name={self.username} price={self.email}>"
