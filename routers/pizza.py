@@ -1,33 +1,16 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from typing import List
-from dependencies import get_db, AuthJWT  # Проверьте пути импорта в соответствии с вашей структурой проекта
-from models import Pizza  # Проверьте пути импорта в соответствии с вашей структурой проекта
+from dependencies import get_db, AuthJWT
+from models import Pizza
+from schemas import PizzaSchema, PizzaAll
 
 router = APIRouter()
 
-class PizzaSchema(BaseModel):
-    name: str
-    description: str
-    price: int
-
-    class Config:
-        orm_mode = True  # Подходит для работы с SQLAlchemy моделями
-
-class PizzaAll(BaseModel):
-    id: int
-    name: str
-    description: str
-    price: int
-
-    class Config:
-        orm_mode = True  # Подходит для работы с SQLAlchemy моделями
 
 @router.post("/pizza", response_model=PizzaAll, status_code=status.HTTP_201_CREATED)
 def add_pizza(pizza: PizzaSchema, db: Session = Depends(get_db), authorize: AuthJWT = Depends()):
-    authorize.jwt_required()  # Требует наличие валидного JWT токена для доступа к этому методу
-
+    authorize.jwt_required()
     existing_pizza = db.query(Pizza).filter(Pizza.name == pizza.name).first()
     if existing_pizza:
         raise HTTPException(
@@ -44,7 +27,46 @@ def add_pizza(pizza: PizzaSchema, db: Session = Depends(get_db), authorize: Auth
         raise HTTPException(status_code=400, detail=str(e))
     return new_pizza
 
+
 @router.get("/pizza", response_model=List[PizzaAll])
 def get_all_pizza(db: Session = Depends(get_db)):
     pizzas = db.query(Pizza).all()
     return pizzas
+
+
+@router.put("/pizza/{pizza_id}")
+def update_pizza(pizza: PizzaSchema, pizza_id=int, db: Session = Depends(get_db), authorize: AuthJWT = Depends()):
+    authorize.jwt_required()
+    existing_pizza = db.query(Pizza).filter(Pizza.id == pizza_id).first()
+    if not existing_pizza:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Pizza with this ID does not exist")
+    existing_pizza.name = pizza.name
+    existing_pizza.description = pizza.description
+    existing_pizza.price = pizza.price
+    db.add(existing_pizza)
+    try:
+        db.commit()
+        db.refresh(existing_pizza)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+    return existing_pizza
+
+
+@router.delete("/pizza/{pizza_id}")
+def delete_pizza(pizza_id=int, db: Session = Depends(get_db), authorize: AuthJWT = Depends()):
+    authorize.jwt_required()
+    existing_pizza = db.query(Pizza).filter(Pizza.id == pizza_id).first()
+    if not existing_pizza:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Pizza with this ID does not exist")
+    db.delete(existing_pizza)
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+    return f"'{pizza_id}: {existing_pizza.name}' is deleted from the menu"

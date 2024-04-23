@@ -1,28 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 import bcrypt
 from dependencies import get_db, AuthJWT
 from config import Settings
-from models import User as DBUser  # Импортируйте модель SQLAlchemy под псевдонимом
+from models import User as DBUser
+from schemas import UserSchema, UserLoginSchema
 
 auth_router = APIRouter()
 
-
-class UserLoginSchema(BaseModel):  # Переименовано для избежания конфликта с User из models.py
-    username: str
-    password: str
-
-    class Config:
-        from_attributes = True
-
-class UserSchema(BaseModel):  # Переименовано для избежания конфликта
-    username: str
-    email: str
-    password: str
-
-    class Config:
-        from_attributes = True
 
 @AuthJWT.load_config
 def get_config():
@@ -69,4 +54,4 @@ def delete_user(user_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="User with this ID not found")
     db.delete(user_to_delete)
     db.commit()
-    return {"user deleted": user_to_delete.username}  # Не возвращайте пароль
+    return {"user deleted": user_to_delete.username}

@@ -1,7 +1,8 @@
 from fastapi import FastAPI
 from routers.pizza import router as pizza_router
-from auth import auth_router  # Новый роутер для аутентификации
+from auth import auth_router
+
 
 app = FastAPI()
 app.include_router(pizza_router)
-app.include_router(auth_router)  # Включение роутера аутентификации
+app.include_router(auth_router)
