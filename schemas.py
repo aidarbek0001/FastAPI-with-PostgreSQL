@@ -45,3 +45,20 @@ class UserSchema(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class OrderCreateSchema(BaseModel):
+    pizza_name: str
+    quantity: int
+
+
+class OrderResponseSchema(BaseModel):
+    id: int
+    customer_name: str
+    pizza_name: str
+    quantity: int
+    status: str
+
+    class Config:
+        from_attributes = True
+

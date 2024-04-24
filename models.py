@@ -1,7 +1,7 @@
 from sqlalchemy.orm import relationship
 from database import Base
 from sqlalchemy import String, Integer, Column, Text, ForeignKey, Enum
-import enum
+
 
 class User(Base):
     __tablename__ = "users"
@@ -32,12 +32,13 @@ class Order(Base):
     __tablename__ = 'orders'
     id = Column(Integer, primary_key=True)
     customer_name = Column(String(255), nullable=False)
-    pizza_id = Column(Integer, ForeignKey('pizza.id'), nullable=False)
+    pizza_name = Column(String(255), ForeignKey('pizza.name'), nullable=False)
     quantity = Column(Integer, nullable=False, default=1)
     status = Column(Enum("pending", "preparing", "ready", "delivered", name="order_statuses"), default="pending", nullable=False)
 
-    pizza = relationship("Pizza", back_populates="orders")
+    pizza = relationship("Pizza", back_populates="orders", foreign_keys=[pizza_name])
 
     def __repr__(self):
-        return f"<Order: customer_name={self.customer_name}, quantity={self.quantity}, status={self.status}>"
+        return f"<Order: customer_name={self.customer_name}, pizza_name={self.pizza_name}, quantity={self.quantity}, status={self.status}>"
+
 
