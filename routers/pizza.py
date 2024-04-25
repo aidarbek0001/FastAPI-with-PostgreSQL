@@ -28,7 +28,7 @@ def add_pizza(pizza: PizzaSchema, db: Session = Depends(get_db), authorize: Auth
     return new_pizza
 
 
-@router.get("/pizza", response_model=List[PizzaAll])
+@router.get("/menu", response_model=List[PizzaAll])
 def get_all_pizza(db: Session = Depends(get_db)):
     pizzas = db.query(Pizza).all()
     return pizzas

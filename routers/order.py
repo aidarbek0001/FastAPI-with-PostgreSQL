@@ -1,11 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from auth import is_admin
 from dependencies import get_db, AuthJWT
 from typing import List
 from models import Pizza, Order
-from schemas import OrderCreateSchema, OrderResponseSchema
+from schemas import OrderCreateSchema, OrderResponseSchema, OrderUpdateSchema
 
 router = APIRouter()
+
 
 @router.post("/order", response_model=OrderResponseSchema, status_code=status.HTTP_201_CREATED)
 def create_order(order_data: OrderCreateSchema, db: Session = Depends(get_db), authorize: AuthJWT = Depends()):
@@ -24,7 +26,6 @@ def create_order(order_data: OrderCreateSchema, db: Session = Depends(get_db), a
     db.add(order)
     db.commit()
     db.refresh(order)
-
     return order
 
 
@@ -65,8 +66,8 @@ def get_user_orders(username: str, db: Session = Depends(get_db), authorize: Aut
 def get_all_orders(db: Session = Depends(get_db), authorize: AuthJWT = Depends()):
     authorize.jwt_required()
 
-    #if not authorize.get_jwt_subject() == "admin":
-    #    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+    if not authorize.get_jwt_subject() == "admin":
+       raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
     orders = db.query(Order).all()
     if not orders:
@@ -74,19 +75,31 @@ def get_all_orders(db: Session = Depends(get_db), authorize: AuthJWT = Depends()
     return orders
 
 
-@router.delete("/order/{order_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_order(order_id: int, db: Session = Depends(get_db), authorize: AuthJWT = Depends()):
-    authorize.jwt_required()
-
-    #if not authorize.get_jwt_subject() == "admin":
-    #    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
-
+@router.put("/order/{order_id}", response_model=OrderResponseSchema, dependencies=[Depends(is_admin)])
+def update_order(order_id: int, update_data: OrderUpdateSchema, db: Session = Depends(get_db)):
     order = db.query(Order).filter(Order.id == order_id).first()
     if not order:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
+    if update_data.pizza_name is not None:
+        order.pizza_name = update_data.pizza_name
+    if update_data.quantity is not None:
+        order.quantity = update_data.quantity
+    if update_data.status is not None:
+        order.status = update_data.status
+    db.commit()
+    return order
 
+@router.delete("/order/{order_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_order(order_id: int, db: Session = Depends(get_db), authorize: AuthJWT = Depends()):
+    authorize.jwt_required()
+    if not authorize.get_jwt_subject() == "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
     db.delete(order)
     db.commit()
     return {"message": "Order deleted successfully"}
+
 
 

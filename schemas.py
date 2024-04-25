@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class PizzaSchema(BaseModel):
@@ -61,4 +61,14 @@ class OrderResponseSchema(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class OrderUpdateSchema(BaseModel):
+    pizza_name: str = Field(None, description="New pizza name")
+    quantity: int = Field(None, description="New quantity")
+    status: str = Field(None, description="New status of the order")
+
+class UserRoleUpdateSchema(BaseModel):
+    role: str
+
 
