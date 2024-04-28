@@ -1,5 +1,3 @@
-from typing import Optional
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 import bcrypt
@@ -23,11 +21,6 @@ def get_current_active_user(authorize: AuthJWT = Depends(), db: Session = Depend
         raise HTTPException(status_code=401, detail="User not found")
     return current_user
 
-
-def is_admin(current_user: DBUser = Depends(get_current_active_user)) -> bool:
-    if current_user.role != "admin":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
-    return True
 
 @auth_router.post("/signup/admin", status_code=201)
 def create_admin(user: UserSchema, db: Session = Depends(get_db), authorize: AuthJWT = Depends()):
@@ -87,7 +80,7 @@ def get_users(db: Session = Depends(get_db), authorize: AuthJWT = Depends()):
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Access denied")
     users = db.query(DBUser).all()
-    return [{"id": user.id, "username": user.username, "email": user.email} for user in users]
+    return [{"id": user.id, "username": user.username, "email": user.email, "role": user.role} for user in users]
 
 @auth_router.delete("/users/{user_id}")
 def delete_user(user_id: int, db: Session = Depends(get_db), authorize: AuthJWT = Depends()):

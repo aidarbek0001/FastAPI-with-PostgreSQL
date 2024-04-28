@@ -1,13 +1,18 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from auth import is_admin
 from dependencies import get_db, AuthJWT
 from typing import List
-from models import Pizza, Order
+from models import Pizza, Order, User as DBUser
 from schemas import OrderCreateSchema, OrderResponseSchema, OrderUpdateSchema
 
 router = APIRouter()
 
+def get_current_active_user(authorize: AuthJWT = Depends(), db: Session = Depends(get_db)) -> DBUser:
+    authorize.jwt_required()
+    current_user = db.query(DBUser).filter(DBUser.username == authorize.get_jwt_subject()).first()
+    if not current_user:
+        raise HTTPException(status_code=401, detail="User not found")
+    return current_user
 
 @router.post("/order", response_model=OrderResponseSchema, status_code=status.HTTP_201_CREATED)
 def create_order(order_data: OrderCreateSchema, db: Session = Depends(get_db), authorize: AuthJWT = Depends()):
@@ -32,7 +37,9 @@ def create_order(order_data: OrderCreateSchema, db: Session = Depends(get_db), a
 @router.patch("/order/{order_id}/status", status_code=status.HTTP_200_OK)
 def update_order_status(order_id: int, db: Session = Depends(get_db), authorize: AuthJWT = Depends()):
     authorize.jwt_required()
-
+    current_user = get_current_active_user(authorize, db)
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Access denied")
     order = db.query(Order).filter(Order.id == order_id).first()
     if not order:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
@@ -55,7 +62,9 @@ def update_order_status(order_id: int, db: Session = Depends(get_db), authorize:
 @router.get("/orders/{username}", response_model=List[OrderResponseSchema], status_code=status.HTTP_200_OK)
 def get_user_orders(username: str, db: Session = Depends(get_db), authorize: AuthJWT = Depends()):
     authorize.jwt_required()
-
+    current_user = get_current_active_user(authorize, db)
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Access denied")
     orders = db.query(Order).filter(Order.customer_name == username).all()
     if not orders:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No orders found for this user")
@@ -65,18 +74,21 @@ def get_user_orders(username: str, db: Session = Depends(get_db), authorize: Aut
 @router.get("/orders", response_model=List[OrderResponseSchema], status_code=status.HTTP_200_OK)
 def get_all_orders(db: Session = Depends(get_db), authorize: AuthJWT = Depends()):
     authorize.jwt_required()
-
-    if not authorize.get_jwt_subject() == "admin":
-       raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
-
+    current_user = get_current_active_user(authorize, db)
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Access denied")
     orders = db.query(Order).all()
     if not orders:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No orders found")
     return orders
 
 
-@router.put("/order/{order_id}", response_model=OrderResponseSchema, dependencies=[Depends(is_admin)])
-def update_order(order_id: int, update_data: OrderUpdateSchema, db: Session = Depends(get_db)):
+@router.put("/order/{order_id}", response_model=OrderResponseSchema)
+def update_order(order_id: int, update_data: OrderUpdateSchema, db: Session = Depends(get_db), authorize: AuthJWT = Depends()):
+    authorize.jwt_required()
+    current_user = get_current_active_user(authorize, db)
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Access denied")
     order = db.query(Order).filter(Order.id == order_id).first()
     if not order:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
@@ -92,8 +104,9 @@ def update_order(order_id: int, update_data: OrderUpdateSchema, db: Session = De
 @router.delete("/order/{order_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_order(order_id: int, db: Session = Depends(get_db), authorize: AuthJWT = Depends()):
     authorize.jwt_required()
-    if not authorize.get_jwt_subject() == "admin":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+    current_user = get_current_active_user(authorize, db)
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Access denied")
     order = db.query(Order).filter(Order.id == order_id).first()
     if not order:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
